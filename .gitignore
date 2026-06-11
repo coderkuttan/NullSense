@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+env/
+
+# Models (too large for GitHub)
+*.pt
+*.onnx
+*.weights
+models/
+
+# Datasets (too large)
+datasets/
+*.zip
+*.tar.gz
+
+# Roboflow
+roboflow.json
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Logs
+*.log
+runs/
