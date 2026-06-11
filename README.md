@@ -1,7 +1,7 @@
 # NullSense 🧢
 ### A Wearable Haptic Navigation System for the Blind
 
-**Team NullVision** | BCA304A-5 Computer Vision | Christ (Deemed to be University) | 2025-26
+**Team NullVision** 
 
 ---
 
