@@ -18,17 +18,16 @@ Christ (Deemed to be University) | 2025-26
 # Options:
 #   'droidcam' -> phone camera via DroidCam (TESTING — current)
 #   'webcam'   -> laptop built-in webcam
-CAM_SOURCE = 'droidcam'
-
+CAM_SOURCE = 'webcam'
 DROIDCAM_IP   = '192.168.1.14'    # <-- CHANGE to your DroidCam IP
 DROIDCAM_PORT = 4747
 
 # For dual camera testing (Phase 7):
 #   FRONT = DroidCam (phone)
 #   BACK  = laptop webcam (index 0)
-FRONT_SOURCE = 'droidcam'   # 'droidcam' or 'webcam'
+FRONT_SOURCE = 'webcam'   # 'droidcam' or 'webcam'
 BACK_SOURCE  = 'webcam'     # 'droidcam' or 'webcam'
-WEBCAM_INDEX = 0
+WEBCAM_INDEX = 1
 
 
 def get_camera_source(which='single'):
