@@ -56,6 +56,23 @@ import yaml
 
 
 # ============================================================
+# STEP 2b: Discover datasets teammates have uploaded to Drive
+# ============================================================
+def discover_datasets(base_dir):
+    """
+    Finds every subfolder of base_dir that looks like a YOLOv8
+    dataset export (contains a data.yaml). Matches the shared
+    convention: base_dir/<category_name>/{train,valid,data.yaml}
+    """
+    found = []
+    for name in sorted(os.listdir(base_dir)):
+        folder = os.path.join(base_dir, name)
+        if os.path.isdir(folder) and os.path.exists(os.path.join(folder, 'data.yaml')):
+            found.append(folder)
+    return found
+
+
+# ============================================================
 # STEP 3: Merge all downloaded datasets
 # ============================================================
 def merge_datasets(dataset_folders, output='merged_dataset'):
@@ -158,24 +175,30 @@ def merge_datasets(dataset_folders, output='merged_dataset'):
 # ============================================================
 # STEP 4: Train custom YOLOv8 model
 # ============================================================
-def train_model(data_yaml='merged_dataset/data.yaml'):
+def train_model(data_yaml='merged_dataset/data.yaml', epochs=50):
     from ultralytics import YOLO
+    import torch
+
+    device = 0 if torch.cuda.is_available() else 'cpu'
+    if device == 'cpu':
+        print("WARNING: no GPU detected — training will be much slower.")
+        print("In Colab: Runtime > Change runtime type > T4 GPU\n")
 
     print("\nStarting NullSense custom model training...")
-    print("This will take 30-60 minutes on Colab GPU\n")
+    print(f"Device: {'GPU' if device == 0 else 'CPU'}\n")
 
     model = YOLO('yolov8n.pt')  # Start from pretrained
 
     results = model.train(
         data=data_yaml,
-        epochs=50,
+        epochs=epochs,
         imgsz=640,
         batch=16,
         name='nullsense_indian',
         pretrained=True,
         patience=10,
         save=True,
-        device=0,        # GPU — use 'cpu' if no GPU
+        device=device,
         verbose=True,
         plots=True,
     )
@@ -189,7 +212,7 @@ def train_model(data_yaml='merged_dataset/data.yaml'):
 # ============================================================
 # STEP 5: Validate trained model
 # ============================================================
-def validate_model(model_path):
+def validate_model(model_path, data_yaml=None, target_map50=0.70):
     from ultralytics import YOLO
     import numpy as np
 
@@ -199,11 +222,20 @@ def validate_model(model_path):
     for i, name in model.names.items():
         print(f"  {i}: {name}")
 
-    # Test on dummy image
+    # Test on dummy image — confirms the model loads and runs inference
     dummy   = np.zeros((640, 640, 3), dtype='uint8')
     results = model(dummy, verbose=False)
     print(f"\nModel running OK")
-    print(f"Use this path in config.py: MODEL_PATH = '{model_path}'")
+
+    if data_yaml:
+        metrics = model.val(data=data_yaml, verbose=False)
+        map50 = metrics.box.map50
+        status = "MEETS" if map50 >= target_map50 else "BELOW"
+        print(f"\nmAP50 on validation set: {map50:.3f} ({status} target of {target_map50})")
+        if map50 < target_map50:
+            print("Consider: more epochs, more images per class, or checking label quality.")
+
+    print(f"\nUse this path in config.py: MODEL_PATH = '{model_path}'")
 
 
 # ============================================================
