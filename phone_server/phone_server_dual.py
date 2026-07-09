@@ -24,7 +24,7 @@ from ultralytics import YOLO
 import cv2
 
 from shared.config import (
-    get_camera_source, MODEL_PATH,
+    get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH,
     SERVER_HOST, SERVER_PORT, SIGNAL_PRIORITY
 )
 from shared.navigation import process_frame, signal_to_bands
@@ -111,7 +111,9 @@ def home():
 
 
 def detection_loop():
-    model = YOLO(MODEL_PATH)
+    coco_model = YOLO(COCO_MODEL_PATH)
+    pothole_model = YOLO(POTHOLE_MODEL_PATH)
+    models = (coco_model, pothole_model)
 
     front_cap = cv2.VideoCapture(
         get_camera_source('front'))
@@ -124,12 +126,12 @@ def detection_loop():
         ret_b, bf = back_cap.read()
 
         if ret_f:
-            _, fs, _, fl, _, fi = process_frame(ff, model)
+            _, fs, _, fl, _, fi = process_frame(ff, models)
         else:
             fs, fl, fi = 'CLEAR', 'none', 0
 
         if ret_b:
-            _, bs, _, bl, _, bi = process_frame(bf, model)
+            _, bs, _, bl, _, bi = process_frame(bf, models)
         else:
             bs, bl, bi = 'CLEAR', 'none', 0
 

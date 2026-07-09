@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 1
+names: ['pothole']
+
+roboflow:
+  workspace: pothole-detection-4wxdf
+  project: pothole-detection-u53qg
+  version: 12
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/pothole-detection-4wxdf/pothole-detection-u53qg/dataset/12

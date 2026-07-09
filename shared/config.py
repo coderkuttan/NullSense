@@ -18,15 +18,15 @@ Christ (Deemed to be University) | 2025-26
 # Options:
 #   'droidcam' -> phone camera via DroidCam (TESTING — current)
 #   'webcam'   -> laptop built-in webcam
-CAM_SOURCE = 'webcam'
-DROIDCAM_IP   = '192.168.1.14'    # <-- CHANGE to your DroidCam IP
+CAM_SOURCE = 'droidcam'
+DROIDCAM_IP   = '192.168.137.185'    # <-- CHANGE to your DroidCam IP
 DROIDCAM_PORT = 4747
 
 # For dual camera testing (Phase 7):
 #   FRONT = DroidCam (phone)
 #   BACK  = laptop webcam (index 0)
-FRONT_SOURCE = 'webcam'   # 'droidcam' or 'webcam'
-BACK_SOURCE  = 'webcam'     # 'droidcam' or 'webcam'
+FRONT_SOURCE = 'droidcam'   # 'droidcam' or 'webcam'
+BACK_SOURCE  = 'droidcam'     # 'droidcam' or 'webcam'
 WEBCAM_INDEX = 1
 
 
@@ -49,9 +49,10 @@ def get_camera_source(which='single'):
 # ══════════════════════════════════════════════
 #  MODEL
 # ══════════════════════════════════════════════
-MODEL_PATH = 'yolov8n.pt'   # change to 'models/nullsense_best.pt' after Phase 6
+COCO_MODEL_PATH = 'yolov8n.pt'
+POTHOLE_MODEL_PATH = 'models/nullsense_potholes.pt'
 CONFIDENCE = 0.5
-
+POTHOLE_CONFIDENCE = 0.70  # Stricter confidence for potholes to reduce false positives
 # ══════════════════════════════════════════════
 #  PHONE SERVER (for ESP32 wristbands)
 # ══════════════════════════════════════════════
@@ -70,11 +71,14 @@ RELEVANT_OBJECTS = [
     'traffic light', 'stop sign', 'fire hydrant', 'bench',
     'chair', 'couch', 'bed', 'dining table', 'toilet',
     'bottle', 'backpack', 'handbag', 'suitcase', 'umbrella',
+    # Phase 6 — custom trained classes
+    'pothole',
 ]
 
 HIGH_PRIORITY = [
     'person', 'car', 'motorcycle',
-    'bus', 'truck', 'dog', 'cow'
+    'bus', 'truck', 'dog', 'cow',
+    'pothole',   # Phase 6 — road hazard
 ]
 
 # ══════════════════════════════════════════════

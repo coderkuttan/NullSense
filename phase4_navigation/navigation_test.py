@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from ultralytics import YOLO
 import cv2
-from shared.config import get_camera_source, MODEL_PATH, HIGH_PRIORITY
+from shared.config import get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH, HIGH_PRIORITY
 from shared.navigation import process_frame
 
 CV2_COLORS = {
@@ -41,7 +41,9 @@ def draw_dashboard(frame, signal, label, zone, distance, intensity):
 
 
 def run():
-    model = YOLO(MODEL_PATH)
+    coco_model = YOLO(COCO_MODEL_PATH)
+    pothole_model = YOLO(POTHOLE_MODEL_PATH)
+    models = (coco_model, pothole_model)
     cap   = cv2.VideoCapture(get_camera_source('single'))
 
     print("Phase 4 — Navigation | Press Q to quit")
@@ -51,7 +53,7 @@ def run():
         if not ret:
             continue
 
-        dets, signal, zone, label, distance, intensity = process_frame(frame, model)
+        dets, signal, zone, label, distance, intensity = process_frame(frame, models)
 
         for (x1,y1,x2,y2,lbl,conf,dist) in dets:
             color = (0,0,255) if lbl in HIGH_PRIORITY else (0,255,0)

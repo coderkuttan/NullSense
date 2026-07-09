@@ -11,13 +11,17 @@ Owner: Friend 2 | Status: IN PROGRESS
 """
 
 import sys, os
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, message=".*pkg_resources is deprecated.*")
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from ultralytics import YOLO
 import cv2
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
 import pygame
 from shared.config import (
-    get_camera_source, MODEL_PATH,
+    get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH,
     BLACK, GRAY, DARK_GRAY,
     RED, ORANGE, YELLOW, GREEN, TEAL, PURPLE,
     SIGNAL_PRIORITY, FPS, HIGH_PRIORITY
@@ -149,7 +153,9 @@ def draw_right(src):
 
 
 def run():
-    model = YOLO(MODEL_PATH)
+    coco_model = YOLO(COCO_MODEL_PATH)
+    pothole_model = YOLO(POTHOLE_MODEL_PATH)
+    models = (coco_model, pothole_model)
     front_cap = cv2.VideoCapture(get_camera_source('front'))
     back_cap  = cv2.VideoCapture(get_camera_source('back'))
     clock = pygame.time.Clock()
@@ -165,9 +171,9 @@ def run():
         rf, ff = front_cap.read()
         rb, bf = back_cap.read()
 
-        if rf: fd,fs,fz,fl,fdist,fi = process_frame(ff, model)
+        if rf: fd,fs,fz,fl,fdist,fi = process_frame(ff, models)
         else:  fd,fs,fz,fl,fdist,fi = [],'CLEAR','CENTER','none','FAR',0
-        if rb: bd,bs,bz,bl,bdist,bi = process_frame(bf, model)
+        if rb: bd,bs,bz,bl,bdist,bi = process_frame(bf, models)
         else:  bd,bs,bz,bl,bdist,bi = [],'CLEAR','CENTER','none','FAR',0
 
         cs, ci, src = combine_signals(fs,fi,bs,bi)

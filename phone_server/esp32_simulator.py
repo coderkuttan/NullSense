@@ -17,9 +17,13 @@ Christ (Deemed to be University) | 2025-26
 """
 
 import sys, os
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, message=".*pkg_resources is deprecated.*")
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 import requests
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
 import pygame
 import time
 from shared.config import (

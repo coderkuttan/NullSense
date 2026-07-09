@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 2
+names: ['person', 'zebra crossing']
+
+roboflow:
+  workspace: 87-dfcmh
+  project: zebra_crossing-zc_2.0
+  version: 2
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/87-dfcmh/zebra_crossing-zc_2.0/dataset/2

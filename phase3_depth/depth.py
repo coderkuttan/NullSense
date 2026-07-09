@@ -12,7 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from ultralytics import YOLO
 import cv2
 from shared.config import (
-    get_camera_source, MODEL_PATH, CONFIDENCE, RELEVANT_OBJECTS
+    get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH, CONFIDENCE, POTHOLE_CONFIDENCE, RELEVANT_OBJECTS
 )
 from shared.navigation import get_distance
 
@@ -23,7 +23,9 @@ COLORS = {
 
 
 def run():
-    model = YOLO(MODEL_PATH)
+    coco_model = YOLO(COCO_MODEL_PATH)
+    pothole_model = YOLO(POTHOLE_MODEL_PATH)
+    models = (coco_model, pothole_model)
     cap   = cv2.VideoCapture(get_camera_source('single'))
 
     print("Phase 3 — Depth Estimation | Press Q to quit")
@@ -35,23 +37,29 @@ def run():
 
         h, w = frame.shape[:2]
         frame_area = h * w
-        results = model(frame, verbose=False, conf=CONFIDENCE)
+        
+        for model in models:
+            results = model(frame, verbose=False, conf=CONFIDENCE)
 
-        for box in results[0].boxes:
-            cls   = int(box.cls[0])
-            label = model.names[cls]
-            if label not in RELEVANT_OBJECTS:
-                continue
+            for box in results[0].boxes:
+                cls   = int(box.cls[0])
+                label = model.names[cls]
+                conf  = float(box.conf[0])
+                if label not in RELEVANT_OBJECTS:
+                    continue
+                    
+                if label == 'pothole' and conf < POTHOLE_CONFIDENCE:
+                    continue
 
-            x1, y1, x2, y2 = map(int, box.xyxy[0])
-            box_area = (x2-x1)*(y2-y1)
-            distance, _ = get_distance(box_area, frame_area)
-            color = COLORS.get(distance, (255,255,255))
+                x1, y1, x2, y2 = map(int, box.xyxy[0])
+                box_area = (x2-x1)*(y2-y1)
+                distance, _ = get_distance(box_area, frame_area)
+                color = COLORS.get(distance, (255,255,255))
 
-            cv2.rectangle(frame, (x1,y1),(x2,y2), color, 2)
-            cv2.putText(frame, f'{label} - {distance}',
-                (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
-            cv2.circle(frame, ((x1+x2)//2,(y1+y2)//2), 5, color, -1)
+                cv2.rectangle(frame, (x1,y1),(x2,y2), color, 2)
+                cv2.putText(frame, f'{label} - {distance}',
+                    (x1, y1-10), cv2.FONT_HERSHEY_SIMPLEX, 0.55, color, 2)
+                cv2.circle(frame, ((x1+x2)//2,(y1+y2)//2), 5, color, -1)
 
         y = 30
         for d, c in COLORS.items():

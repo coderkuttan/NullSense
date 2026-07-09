@@ -12,7 +12,7 @@ import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 from shared.config import (
     RELEVANT_OBJECTS, HIGH_PRIORITY,
-    SIGNAL_PRIORITY, SIGNAL_COLORS, CONFIDENCE
+    SIGNAL_PRIORITY, SIGNAL_COLORS, CONFIDENCE, POTHOLE_CONFIDENCE
 )
 
 
@@ -70,9 +70,10 @@ def signal_to_bands(signal, intensity):
     return patterns.get(signal, ([0, 0, 0], [0, 0, 0]))
 
 
-def process_frame(frame, model):
+def process_frame(frame, models):
     """
     Run YOLO on a frame, return top-priority signal + all detections.
+    `models` can be a single model or a list of models (e.g., COCO + pothole).
 
     Returns:
         detections    : list of (x1,y1,x2,y2,label,conf,distance)
@@ -81,7 +82,8 @@ def process_frame(frame, model):
     h, w       = frame.shape[:2]
     frame_area = h * w
 
-    results = model(frame, verbose=False, conf=CONFIDENCE)
+    if not isinstance(models, (list, tuple)):
+        models = [models]
 
     top_signal    = 'CLEAR'
     top_priority  = 0
@@ -91,35 +93,41 @@ def process_frame(frame, model):
     top_intensity = 0
     detections    = []
 
-    for box in results[0].boxes:
-        cls   = int(box.cls[0])
-        label = model.names[cls]
-        conf  = float(box.conf[0])
+    for m in models:
+        results = m(frame, verbose=False, conf=CONFIDENCE)
 
-        if label not in RELEVANT_OBJECTS:
-            continue
+        for box in results[0].boxes:
+            cls   = int(box.cls[0])
+            label = m.names[cls]
+            conf  = float(box.conf[0])
 
-        x1, y1, x2, y2 = map(int, box.xyxy[0])
-        cx       = (x1 + x2) // 2
-        box_area = (x2 - x1) * (y2 - y1)
+            if label not in RELEVANT_OBJECTS:
+                continue
+            
+            if label == 'pothole' and conf < POTHOLE_CONFIDENCE:
+                continue
 
-        zone               = get_zone(cx, w)
-        distance, intensity = get_distance(box_area, frame_area)
-        signal             = get_signal(zone, distance)
-        priority           = SIGNAL_PRIORITY.get(signal, 1)
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            cx       = (x1 + x2) // 2
+            box_area = (x2 - x1) * (y2 - y1)
 
-        if label in HIGH_PRIORITY:
-            priority += 1
+            zone               = get_zone(cx, w)
+            distance, intensity = get_distance(box_area, frame_area)
+            signal             = get_signal(zone, distance)
+            priority           = SIGNAL_PRIORITY.get(signal, 1)
 
-        detections.append((x1, y1, x2, y2, label, conf, distance))
+            if label in HIGH_PRIORITY:
+                priority += 1
 
-        if priority > top_priority:
-            top_priority  = priority
-            top_signal    = signal
-            top_zone      = zone
-            top_label     = label
-            top_distance  = distance
-            top_intensity = intensity
+            detections.append((x1, y1, x2, y2, label, conf, distance))
+
+            if priority > top_priority:
+                top_priority  = priority
+                top_signal    = signal
+                top_zone      = zone
+                top_label     = label
+                top_distance  = distance
+                top_intensity = intensity
 
     return (detections, top_signal, top_zone,
             top_label, top_distance, top_intensity)

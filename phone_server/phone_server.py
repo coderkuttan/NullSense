@@ -28,7 +28,7 @@ from ultralytics import YOLO
 import cv2
 
 from shared.config import (
-    get_camera_source, MODEL_PATH, CONFIDENCE,
+    get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH, CONFIDENCE,
     SERVER_HOST, SERVER_PORT, SIGNAL_PRIORITY
 )
 from shared.navigation import process_frame, signal_to_bands
@@ -113,7 +113,9 @@ def detection_loop():
     Continuously reads camera and updates the shared signal state.
     Runs in a background thread so the Flask server stays responsive.
     """
-    model = YOLO(MODEL_PATH)
+    coco_model = YOLO(COCO_MODEL_PATH)
+    pothole_model = YOLO(POTHOLE_MODEL_PATH)
+    models = (coco_model, pothole_model)
 
     cap = cv2.VideoCapture(
         get_camera_source('single'))
@@ -126,7 +128,7 @@ def detection_loop():
             continue
 
         (dets, signal, zone,
-         label, distance, intensity) = process_frame(frame, model)
+         label, distance, intensity) = process_frame(frame, models)
 
         # Update shared state
         state['signal']    = signal

@@ -7,13 +7,17 @@ Owner: Lead | Status: COMPLETED
 """
 
 import sys, os
+import warnings
+
+warnings.filterwarnings("ignore", category=UserWarning, message=".*pkg_resources is deprecated.*")
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 from ultralytics import YOLO
 import cv2
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = 'hide'
 import pygame
 from shared.config import (
-    get_camera_source, MODEL_PATH,
+    get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH,
     BLACK, WHITE, GRAY, DARK_GRAY,
     RED, ORANGE, YELLOW, GREEN, TEAL,
     SCREEN_W, SCREEN_H, FPS, HIGH_PRIORITY
@@ -116,7 +120,9 @@ def draw_band_panel(signal, zone, label, distance, intensity):
 
 
 def run():
-    model = YOLO(MODEL_PATH)
+    coco_model = YOLO(COCO_MODEL_PATH)
+    pothole_model = YOLO(POTHOLE_MODEL_PATH)
+    models = (coco_model, pothole_model)
     cap   = cv2.VideoCapture(get_camera_source('single'))
     clock = pygame.time.Clock()
     print("Phase 5 — Band Simulator | Press Q to quit")
@@ -131,7 +137,7 @@ def run():
         if not ret:
             continue
 
-        dets, signal, zone, label, distance, intensity = process_frame(frame, model)
+        dets, signal, zone, label, distance, intensity = process_frame(frame, models)
         screen.fill(BLACK)
         draw_camera(frame, dets, signal, zone, label, distance)
         draw_band_panel(signal, zone, label, distance, intensity)
