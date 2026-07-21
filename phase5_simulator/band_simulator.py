@@ -20,9 +20,11 @@ from shared.config import (
     get_camera_source, COCO_MODEL_PATH, POTHOLE_MODEL_PATH,
     BLACK, WHITE, GRAY, DARK_GRAY,
     RED, ORANGE, YELLOW, GREEN, TEAL,
-    SCREEN_W, SCREEN_H, FPS, HIGH_PRIORITY
+    SCREEN_W, SCREEN_H, FPS, HIGH_PRIORITY,
+    SIGNAL_PRIORITY, OBSTACLE_ALERT_CM, GROUND_SPIKE_MM,
 )
 from shared.navigation import process_frame, get_sig_color, signal_to_bands
+from shared.sensors import SensorClient
 
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_W, SCREEN_H))
@@ -96,12 +98,54 @@ def draw_arrow(signal, cx, cy):
         pygame.draw.line(screen, WHITE, (cx-3,cy+8),(cx+10,cy-6), 3)
 
 
-def draw_band_panel(signal, zone, label, distance, intensity):
+def sensor_alert_flags(sensors):
+    """(left_alert, right_alert, ground_alert) booleans from the latest sensor reading."""
+    if not sensors.get('online'):
+        return False, False, False
+    left_alert  = 0 <= sensors['left_cm']  < OBSTACLE_ALERT_CM
+    right_alert = 0 <= sensors['right_cm'] < OBSTACLE_ALERT_CM
+    gnd_alert   = sensors['gnd_l_mm'] > GROUND_SPIKE_MM or sensors['gnd_r_mm'] > GROUND_SPIKE_MM
+    return left_alert, right_alert, gnd_alert
+
+
+def obstacle_intensity(cm):
+    if cm < 0:                return 0
+    if cm < OBSTACLE_ALERT_CM / 3: return 3
+    if cm < OBSTACLE_ALERT_CM * 2 / 3: return 2
+    return 1
+
+
+def sensor_signal(sensors):
+    """Map the latest sensor reading straight to a (signal, intensity) pair."""
+    left_alert, right_alert, gnd_alert = sensor_alert_flags(sensors)
+    if gnd_alert:
+        return 'STOP', 3
+    if left_alert and right_alert:
+        return 'STOP', 3
+    if left_alert:
+        return 'MOVE RIGHT', obstacle_intensity(sensors['left_cm'])
+    if right_alert:
+        return 'MOVE LEFT', obstacle_intensity(sensors['right_cm'])
+    return 'CLEAR', 0
+
+
+def combine_signal(cam_signal, cam_intensity, sen_signal, sen_intensity):
+    """Camera and sensor each propose a signal; the higher-priority one wins."""
+    if SIGNAL_PRIORITY.get(sen_signal, 1) > SIGNAL_PRIORITY.get(cam_signal, 1):
+        return sen_signal, sen_intensity
+    return cam_signal, cam_intensity
+
+
+def draw_band_panel(signal, zone, label, distance, intensity, sensors, alert_active):
     pygame.draw.rect(screen, DARK_GRAY, (600,0,400,600))
-    pygame.draw.line(screen, GRAY, (600,0),(600,600), 2)
+    border_color = RED if alert_active else GRAY
+    pygame.draw.line(screen, border_color, (600,0),(600,600), 4 if alert_active else 2)
     sc = get_sig_color(signal)
     t = font_l.render('NULLSENSE BANDS', True, TEAL)
     screen.blit(t, (800-t.get_width()//2, 15))
+    if alert_active and (pygame.time.get_ticks() // 400) % 2 == 0:
+        badge = font_m.render('ALERT', True, RED)
+        screen.blit(badge, (985-badge.get_width(), 15))
     s = font_l.render(signal, True, sc)
     screen.blit(s, (800-s.get_width()//2, 50))
     draw_arrow(signal, 800, 100)
@@ -110,42 +154,67 @@ def draw_band_panel(signal, zone, label, distance, intensity):
     draw_band(845, 140, rv, 'RIGHT', sc)
     pygame.draw.rect(screen, (20,20,20), (600,450,400,150))
     pygame.draw.line(screen, GRAY, (600,450),(1000,450), 1)
-    for i, line in enumerate([
-        f'Object  : {label}', f'Zone    : {zone}',
-        f'Distance: {distance}',
-        f'Pressure: {"#"*intensity}{"-"*(3-intensity)}'
-    ]):
-        t = font_s.render(line, True, sc if i==3 else (180,180,180))
-        screen.blit(t, (615, 460+i*30))
+
+    left_alert, right_alert, gnd_alert = sensor_alert_flags(sensors)
+    if sensors.get('online'):
+        sensor_txt = f"L:{sensors['left_cm']:.0f}cm  R:{sensors['right_cm']:.0f}cm"
+        ground_txt = f"L:{sensors['gnd_l_mm']}mm  R:{sensors['gnd_r_mm']}mm"
+    else:
+        sensor_txt, ground_txt = 'offline', 'offline'
+
+    lines = [
+        (f'Object  : {label}', (180,180,180)),
+        (f'Zone    : {zone}', (180,180,180)),
+        (f'Distance: {distance}', (180,180,180)),
+        (f'Sensor  : {sensor_txt}', RED if (left_alert or right_alert) else (180,180,180)),
+        (f'Ground  : {ground_txt}', RED if gnd_alert else (180,180,180)),
+        (f'Pressure: {"#"*intensity}{"-"*(3-intensity)}', sc),
+    ]
+    for i, (line, color) in enumerate(lines):
+        t = font_s.render(line, True, color)
+        screen.blit(t, (615, 458+i*23))
 
 
 def run():
-    coco_model = YOLO(COCO_MODEL_PATH)
-    pothole_model = YOLO(POTHOLE_MODEL_PATH)
-    models = (coco_model, pothole_model)
+    models = [YOLO(COCO_MODEL_PATH)]
+    if os.path.exists(POTHOLE_MODEL_PATH):
+        models.append(YOLO(POTHOLE_MODEL_PATH))
+    else:
+        print(f"[warn] Pothole model not found at '{POTHOLE_MODEL_PATH}' — "
+              "running with COCO detection only. Train it via phase6_training/train_potholes.py.")
     cap   = cv2.VideoCapture(get_camera_source('single'))
     clock = pygame.time.Clock()
+    sensor_client = SensorClient().start()
     print("Phase 5 — Band Simulator | Press Q to quit")
 
     running = True
-    while running:
-        for e in pygame.event.get():
-            if e.type == pygame.QUIT: running = False
-            if e.type == pygame.KEYDOWN and e.key == pygame.K_q: running = False
+    try:
+        while running:
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT: running = False
+                if e.type == pygame.KEYDOWN and e.key == pygame.K_q: running = False
 
-        ret, frame = cap.read()
-        if not ret:
-            continue
+            ret, frame = cap.read()
+            if not ret:
+                continue
 
-        dets, signal, zone, label, distance, intensity = process_frame(frame, models)
-        screen.fill(BLACK)
-        draw_camera(frame, dets, signal, zone, label, distance)
-        draw_band_panel(signal, zone, label, distance, intensity)
-        pygame.display.flip()
-        clock.tick(FPS)
+            dets, cam_signal, zone, label, distance, cam_intensity = process_frame(frame, models)
 
-    cap.release()
-    pygame.quit()
+            sensors = sensor_client.latest()
+            sen_signal, sen_intensity = sensor_signal(sensors)
+            signal, intensity = combine_signal(cam_signal, cam_intensity, sen_signal, sen_intensity)
+            left_alert, right_alert, gnd_alert = sensor_alert_flags(sensors)
+            alert_active = left_alert or right_alert or gnd_alert
+
+            screen.fill(BLACK)
+            draw_camera(frame, dets, signal, zone, label, distance)
+            draw_band_panel(signal, zone, label, distance, intensity, sensors, alert_active)
+            pygame.display.flip()
+            clock.tick(FPS)
+    finally:
+        sensor_client.stop()
+        cap.release()
+        pygame.quit()
 
 
 if __name__ == '__main__':

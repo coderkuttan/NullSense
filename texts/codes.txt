@@ -1,0 +1,169 @@
+"""
+NullSense — Single Front Camera + Sensor Fusion
+Phone (DroidCam) front camera → YOLO, fused with ESP32 sensor data.
+Live view: camera + detections + sensor bars + fused signal.
+"""
+import cv2, requests
+from ultralytics import YOLO
+
+# ─── EDIT THESE ───
+DROIDCAM_URL = "http://192.168.137.90:4747/video"   # phone DroidCam
+SENSOR_URL   = "http://192.168.137.150/sensors"     # ESP32 IP
+MODEL_PATH   = "yolov8n.pt"                          # or models/nullsense_best.pt
+# ──────────────────
+
+CONF = 0.5
+model = YOLO(MODEL_PATH)
+
+RELEVANT = {"person","bicycle","car","motorcycle","bus","truck",
+            "dog","cat","chair","bench","backpack","suitcase","pottedplant"}
+
+# distance categories (cm)
+def dist_cat(cm):
+    if cm < 0:   return "NONE"
+    if cm < 50:  return "VERY CLOSE"
+    if cm < 100: return "CLOSE"
+    if cm < 200: return "MEDIUM"
+    return "FAR"
+
+def get_sensors():
+    try:
+        return requests.get(SENSOR_URL, timeout=0.2).json()
+    except Exception:
+        return None
+
+def get_zone(cx, w):
+    r = cx / w
+    if r < 0.2:  return "FAR LEFT"
+    if r < 0.4:  return "LEFT"
+    if r < 0.6:  return "CENTER"
+    if r < 0.8:  return "RIGHT"
+    return "FAR RIGHT"
+
+def bbox_depth(box_h, frame_h):
+    """Rough camera depth: bigger box = closer. Returns approx cm."""
+    ratio = box_h / frame_h
+    if ratio > 0.8:  return 40
+    if ratio > 0.6:  return 70
+    if ratio > 0.4:  return 110
+    if ratio > 0.2:  return 180
+    return 300
+
+def fuse(zone, cam_cm, sensors):
+    """Return (distance_cm, source, agree_flag)."""
+    if sensors is None:
+        return cam_cm, "camera", False
+
+    # pick the sensor that covers this zone
+    if zone in ("FAR LEFT", "LEFT"):
+        s_cm = sensors["left_cm"]
+    elif zone in ("RIGHT", "FAR RIGHT"):
+        s_cm = sensors["right_cm"]
+    else:
+        return cam_cm, "camera(center)", False   # no forward sensor
+
+    if s_cm < 0:                       # sensor saw nothing in range
+        return cam_cm, "camera", False
+
+    # both have a reading — do they agree within 40 cm?
+    agree = abs(s_cm - cam_cm) < 40
+    return s_cm, "sensor", agree       # sensor wins on distance
+
+def signal_for(zone, cm):
+    """Map zone + distance to a navigation signal."""
+    if cm < 0 or cm > 200:
+        return "CLEAR"
+    if cm < 50:
+        if zone == "CENTER": return "STOP"
+        if "LEFT" in zone:   return "MOVE RIGHT"
+        if "RIGHT" in zone:  return "MOVE LEFT"
+    if cm < 100:
+        if zone == "CENTER": return "CAUTION CENTER"
+        if "LEFT" in zone:   return "SLIGHT RIGHT"
+        if "RIGHT" in zone:  return "SLIGHT LEFT"
+    return "CLEAR"
+
+SIG_PRIORITY = {"CLEAR":1,"SLIGHT LEFT":2,"SLIGHT RIGHT":2,
+                "MOVE LEFT":3,"MOVE RIGHT":3,"CAUTION CENTER":4,"STOP":5}
+
+cap = cv2.VideoCapture(DROIDCAM_URL)
+if not cap.isOpened():
+    print("Cannot open DroidCam. Check IP / app running.")
+    raise SystemExit
+
+print("Fusion running. Press Q to quit.")
+
+while True:
+    ok, frame = cap.read()
+    if not ok:
+        print("frame drop..."); continue
+
+    h, w = frame.shape[:2]
+    sensors = get_sensors()
+
+    # ground hazard check FIRST — overrides everything
+    ground_stop = False
+    if sensors:
+        if sensors["gnd_l_mm"] > 1200 or sensors["gnd_r_mm"] > 1200:
+            ground_stop = True
+
+    results = model(frame, conf=CONF, verbose=False)[0]
+
+    best_sig, best_pri = "CLEAR", 1
+    detections = []
+
+    for b in results.boxes:
+        cls = model.names[int(b.cls)]
+        if cls not in RELEVANT:
+            continue
+        x1,y1,x2,y2 = map(int, b.xyxy[0])
+        cx = (x1+x2)//2
+        box_h = y2-y1
+        zone = get_zone(cx, w)
+        cam_cm = bbox_depth(box_h, h)
+        fused_cm, source, agree = fuse(zone, cam_cm, sensors)
+        sig = signal_for(zone, fused_cm)
+
+        if SIG_PRIORITY[sig] > best_pri:
+            best_pri, best_sig = SIG_PRIORITY[sig], sig
+
+        detections.append((x1,y1,x2,y2,cls,zone,cam_cm,fused_cm,source,agree))
+
+        # draw box — green if agree, orange if sensor-only, gray if camera
+        col = (0,200,0) if agree else (0,140,220) if "sensor" in source else (150,150,150)
+        cv2.rectangle(frame,(x1,y1),(x2,y2),col,2)
+        cv2.putText(frame,f"{cls} {zone}",(x1,y1-25),
+                    cv2.FONT_HERSHEY_SIMPLEX,0.5,col,1)
+        cv2.putText(frame,f"cam~{cam_cm} sensor={fused_cm:.0f}",(x1,y1-8),
+                    cv2.FONT_HERSHEY_SIMPLEX,0.45,col,1)
+
+    if ground_stop:
+        best_sig = "STOP"
+
+    # zone divider lines
+    for i in range(1,5):
+        x = int(w*i/5)
+        cv2.line(frame,(x,0),(x,h),(60,60,60),1)
+
+    # ── sidebar panel ──
+    panel = frame.copy()
+    cv2.rectangle(panel,(0,0),(w,70),(20,20,25),-1)
+    cv2.addWeighted(panel,0.6,frame,0.4,0,frame)
+
+    sig_col = (0,0,255) if best_sig=="STOP" else (0,165,255) if "MOVE" in best_sig or "CAUTION" in best_sig else (0,200,0)
+    cv2.putText(frame,f"SIGNAL: {best_sig}",(10,30),
+                cv2.FONT_HERSHEY_SIMPLEX,0.8,sig_col,2)
+
+    if sensors:
+        txt=f"L:{sensors['left_cm']:.0f}cm  R:{sensors['right_cm']:.0f}cm  GndL:{sensors['gnd_l_mm']}  GndR:{sensors['gnd_r_mm']}"
+    else:
+        txt="SENSORS: offline"
+    cv2.putText(frame,txt,(10,55),
+                cv2.FONT_HERSHEY_SIMPLEX,0.5,(200,200,200),1)
+
+    cv2.imshow("NullSense Fusion", frame)
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cap.release()
+cv2.destroyAllWindows()

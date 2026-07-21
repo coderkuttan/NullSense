@@ -19,7 +19,7 @@ Christ (Deemed to be University) | 2025-26
 #   'droidcam' -> phone camera via DroidCam (TESTING — current)
 #   'webcam'   -> laptop built-in webcam
 CAM_SOURCE = 'droidcam'
-DROIDCAM_IP   = '192.168.137.185'    # <-- CHANGE to your DroidCam IP
+DROIDCAM_IP   = '10.150.165.155'        # <-- CHANGE to your DroidCam IP
 DROIDCAM_PORT = 4747
 
 # For dual camera testing (Phase 7):
@@ -27,7 +27,7 @@ DROIDCAM_PORT = 4747
 #   BACK  = laptop webcam (index 0)
 FRONT_SOURCE = 'droidcam'   # 'droidcam' or 'webcam'
 BACK_SOURCE  = 'droidcam'     # 'droidcam' or 'webcam'
-WEBCAM_INDEX = 1
+WEBCAM_INDEX = 0
 
 
 def get_camera_source(which='single'):
@@ -47,9 +47,21 @@ def get_camera_source(which='single'):
 
 
 # ══════════════════════════════════════════════
+#  SENSOR NODE  — XIAO ESP32-C3 (Phase 8 fusion)
+# ══════════════════════════════════════════════
+SENSOR_NODE_IP   = '192.168.137.125'   # <-- CHANGE to your ESP32 sensor node IP
+SENSOR_NODE_PATH = '/stream'
+SENSOR_URL = f'http://{SENSOR_NODE_IP}{SENSOR_NODE_PATH}'
+
+# Alert thresholds (used by Phase 5 simulator + Phase 8 fusion)
+OBSTACLE_ALERT_CM = 15     # ultrasonic reading below this = obstacle alert
+GROUND_SPIKE_MM   = 1200   # ground sensor reading above this = drop-off/hole hazard
+
+
+# ══════════════════════════════════════════════
 #  MODEL
 # ══════════════════════════════════════════════
-COCO_MODEL_PATH = 'yolov8n.pt'
+COCO_MODEL_PATH = 'yolo11n.pt'
 POTHOLE_MODEL_PATH = 'models/nullsense_potholes.pt'
 CONFIDENCE = 0.5
 POTHOLE_CONFIDENCE = 0.70  # Stricter confidence for potholes to reduce false positives
