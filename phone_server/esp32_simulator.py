@@ -47,19 +47,19 @@ font_s = pygame.font.SysFont('Arial', 14)
 
 
 def poll_band(band):
-    """Poll server for a band's signal. Returns (signal, [f,m,b])."""
+    """Poll server for a band's signal. Returns (signal, intensity)."""
     try:
         url  = f'http://{SERVER_IP}:{SERVER_PORT}/signal?band={band}'
         resp = requests.get(url, timeout=0.2)
-        parts = resp.text.strip().split(',')
-        signal  = parts[0]
-        pattern = [int(parts[1]), int(parts[2]), int(parts[3])]
-        return signal, pattern
+        signal, intensity = resp.text.strip().split(',')
+        return signal, int(intensity)
     except Exception:
-        return 'NO CONNECTION', [0, 0, 0]
+        return 'NO CONNECTION', 0
 
 
-def draw_band(x, y, label, pattern, signal):
+def draw_band(x, y, label, intensity, signal):
+    """All 3 LRAs are wired in parallel on real hardware and fire together
+    at one intensity — draw a single indicator, not a front/mid/back triplet."""
     bw, bh = 280, 300
     sc = get_sig_color(signal) if signal != 'NO CONNECTION' else GRAY
 
@@ -72,27 +72,24 @@ def draw_band(x, y, label, pattern, signal):
     sig = font_m.render(signal, True, sc)
     screen.blit(sig, (x + bw//2 - sig.get_width()//2, y + 40))
 
-    names = ['FRONT', 'MID', 'BACK']
-    for i, (val, name) in enumerate(zip(pattern, names)):
-        cy = y + 110 + i * 60
-        cx = x + bw // 2
-        pygame.draw.circle(screen, GRAY, (cx, cy), 25)
-        if   val == 0: color, r = (40, 40, 40), 15
-        elif val == 1: color, r = GREEN,  17
-        elif val == 2: color, r = ORANGE, 21
-        else:          color, r = RED,    24
-        pygame.draw.circle(screen, color, (cx, cy), r)
-        if val > 0:
-            pygame.draw.circle(screen, sc, (cx, cy), r + 4, 2)
-        nt = font_s.render(f'{name}', True, WHITE if val > 0 else GRAY)
-        screen.blit(nt, (cx + 35, cy - 8))
+    cx, cy = x + bw // 2, y + 170
+    pygame.draw.circle(screen, GRAY, (cx, cy), 55)
+    if   intensity == 0: color, r = (40, 40, 40), 35
+    elif intensity == 1: color, r = GREEN,  42
+    elif intensity == 2: color, r = ORANGE, 48
+    else:                 color, r = RED,    54
+    pygame.draw.circle(screen, color, (cx, cy), r)
+    if intensity > 0:
+        pygame.draw.circle(screen, sc, (cx, cy), r + 5, 2)
+    nt = font_s.render(f'intensity {intensity}/3 (all 3 LRAs)', True, WHITE if intensity > 0 else GRAY)
+    screen.blit(nt, (cx - nt.get_width()//2, cy + 65))
 
 
 def main():
     clock     = pygame.time.Clock()
     last_poll = 0
-    left_sig, left_pat   = 'CLEAR', [0,0,0]
-    right_sig, right_pat = 'CLEAR', [0,0,0]
+    left_sig, left_int   = 'CLEAR', 0
+    right_sig, right_int = 'CLEAR', 0
 
     print(f"ESP32 Simulator polling http://{SERVER_IP}:{SERVER_PORT}")
     print("Make sure phone_server.py is running!")
@@ -109,8 +106,8 @@ def main():
         now = pygame.time.get_ticks()
         if now - last_poll >= POLL_MS:
             last_poll = now
-            left_sig,  left_pat  = poll_band('LEFT')
-            right_sig, right_pat = poll_band('RIGHT')
+            left_sig,  left_int  = poll_band('LEFT')
+            right_sig, right_int = poll_band('RIGHT')
 
         # Draw
         screen.fill(BLACK)
@@ -121,8 +118,8 @@ def main():
             True, GRAY)
         screen.blit(sub, (W//2 - sub.get_width()//2, 48))
 
-        draw_band(40,  90, 'LEFT',  left_pat,  left_sig)
-        draw_band(380, 90, 'RIGHT', right_pat, right_sig)
+        draw_band(40,  90, 'LEFT',  left_int,  left_sig)
+        draw_band(380, 90, 'RIGHT', right_int, right_sig)
 
         hint = font_s.render('Q = Quit', True, GRAY)
         screen.blit(hint, (W//2 - hint.get_width()//2, H - 30))

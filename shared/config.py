@@ -19,7 +19,7 @@ Christ (Deemed to be University) | 2025-26
 #   'droidcam' -> phone camera via DroidCam (TESTING — current)
 #   'webcam'   -> laptop built-in webcam
 CAM_SOURCE = 'droidcam'
-DROIDCAM_IP   = '10.150.165.155'        # <-- CHANGE to your DroidCam IP
+DROIDCAM_IP   = '192.168.137.125'        # <-- CHANGE to your DroidCam IP
 DROIDCAM_PORT = 4747
 
 # For dual camera testing (Phase 7):
@@ -49,13 +49,19 @@ def get_camera_source(which='single'):
 # ══════════════════════════════════════════════
 #  SENSOR NODE  — XIAO ESP32-C3 (Phase 8 fusion)
 # ══════════════════════════════════════════════
-SENSOR_NODE_IP   = '192.168.137.125'   # <-- CHANGE to your ESP32 sensor node IP
+# The ESP32 advertises itself via mDNS, so its DHCP-assigned IP changing
+# every boot no longer matters. If mDNS resolution isn't working on your
+# network, switch this to the numeric IP shown on its Serial Monitor instead
+# (e.g. '192.168.137.37').
+SENSOR_NODE_ADDR = 'nullsense-helmet.local'
 SENSOR_NODE_PATH = '/stream'
-SENSOR_URL = f'http://{SENSOR_NODE_IP}{SENSOR_NODE_PATH}'
+SENSOR_URL = f'http://{SENSOR_NODE_ADDR}{SENSOR_NODE_PATH}'
+SENSOR_POLL_URL  = f'http://{SENSOR_NODE_ADDR}/sensors'   # one-shot JSON GET (phone_server.py)
 
 # Alert thresholds (used by Phase 5 simulator + Phase 8 fusion)
 OBSTACLE_ALERT_CM = 15     # ultrasonic reading below this = obstacle alert
 GROUND_SPIKE_MM   = 1200   # ground sensor reading above this = drop-off/hole hazard
+SIDE_OBSTACLE_CM  = 60     # ultrasonic reading below this = side obstacle (phone_server.py)
 
 
 # ══════════════════════════════════════════════
@@ -77,12 +83,21 @@ HOTSPOT_PASS = 'nullsense123'
 #  DETECTION OBJECTS
 # ══════════════════════════════════════════════
 RELEVANT_OBJECTS = [
-    'person',
-    'bicycle', 'car', 'motorcycle', 'bus', 'truck', 'train',
-    'dog', 'cat', 'cow', 'horse', 'bird',
-    'traffic light', 'stop sign', 'fire hydrant', 'bench',
-    'chair', 'couch', 'bed', 'dining table', 'toilet',
-    'bottle', 'backpack', 'handbag', 'suitcase', 'umbrella',
+    # All 80 COCO classes yolo11n.pt can detect — every class the model
+    # supports gets a box, not just a curated navigation subset.
+    'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
+    'truck', 'boat', 'traffic light', 'fire hydrant', 'stop sign',
+    'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+    'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella',
+    'handbag', 'tie', 'suitcase', 'frisbee', 'skis', 'snowboard',
+    'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard',
+    'surfboard', 'tennis racket', 'bottle', 'wine glass', 'cup', 'fork',
+    'knife', 'spoon', 'bowl', 'banana', 'apple', 'sandwich', 'orange',
+    'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair',
+    'couch', 'potted plant', 'bed', 'dining table', 'toilet', 'tv',
+    'laptop', 'mouse', 'remote', 'keyboard', 'cell phone', 'microwave',
+    'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
+    'scissors', 'teddy bear', 'hair drier', 'toothbrush',
     # Phase 6 — custom trained classes
     'pothole',
 ]

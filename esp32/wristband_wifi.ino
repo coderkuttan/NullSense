@@ -1,14 +1,13 @@
 /*
-  NullSense — ESP32 Wristband (WiFi Client)
-  ==========================================
-  Connects to phone/laptop WiFi server, polls for
-  navigation signals, and fires LRA actuators.
+  NullSense — Wristband (LEFT or RIGHT)
+  XIAO ESP32-C3 · DRV2605L · 3× LRA wired in PARALLEL (no MOSFETs)
+  All three LRAs fire together — direction is conveyed by
+  WHICH wristband buzzes, not which motor within it.
 
   ARCHITECTURE:
-    Phone runs phone_server.py (the brain)
-    This ESP32 polls http://SERVER_IP:5000/signal
-    Server responds: "SIGNAL,front,mid,back"
-    e.g. "STOP,3,3,3" or "MOVE LEFT,2,2,0"
+    Laptop/phone runs phone_server.py (camera + helmet-sensor fusion)
+    This ESP32 polls http://SERVER_IP:5000/signal?band=LEFT|RIGHT
+    Server responds: "SIGNAL,intensity"   e.g. "STOP,3" or "CLEAR,0"
 
   Hardware wiring (Seeed XIAO ESP32-C3):
   ┌─────────────┬──────────────┐
@@ -22,13 +21,14 @@
 
   Libraries (Arduino IDE):
   - Adafruit DRV2605 Library
-  - WiFi (built-in for ESP32)
-  - HTTPClient (built-in)
+  - WiFi + HTTPClient (built-in for ESP32)
 
   BEFORE UPLOADING:
-  1. Set WIFI_SSID + WIFI_PASS to your phone hotspot
+  1. Set SSID + PASS to your phone hotspot
   2. Set SERVER_IP to the IP shown when phone_server.py starts
   3. Set BAND_SIDE to "LEFT" or "RIGHT"
+
+  >>> CHANGE BAND_SIDE TO "RIGHT" FOR THE SECOND BOARD <<<
 
   Team: NullVision | BCA304A-5 Computer Vision
   Christ (Deemed to be University) | 2025-26
@@ -39,81 +39,59 @@
 #include <Wire.h>
 #include <Adafruit_DRV2605.h>
 
-// ── CONFIGURE THESE ──
-const char* WIFI_SSID = "NullSense";        // Phone hotspot name
-const char* WIFI_PASS = "nullsense123";     // Phone hotspot password
-const char* SERVER_IP = "192.168.43.1";     // Phone IP (shown on server start)
-const int   SERVER_PORT = 5000;
-const char* BAND_SIDE = "LEFT";             // "LEFT" or "RIGHT"
+const char* SSID      = "NullSense";
+const char* PASS      = "nullsense123";
+const char* SERVER_IP = "192.168.137.1";   // laptop hotspot IP
+const char* BAND_SIDE = "LEFT";            // <<< "LEFT" or "RIGHT"
 
-// ── DRV2605 ──
 Adafruit_DRV2605 drv;
-String last_signal = "";
-unsigned long last_poll = 0;
+String lastSignal = "";
+unsigned long lastPoll = 0;
 const int POLL_INTERVAL = 80;  // ms between polls (~12 Hz)
 
-// ── LRA Intensity -> DRV2605 effect ──
-uint8_t getEffect(uint8_t intensity) {
-  switch(intensity) {
-    case 1: return 16;  // soft click
-    case 2: return 14;  // medium click
-    case 3: return 1;   // strong click
+uint8_t effectFor(uint8_t intensity) {
+  switch (intensity) {
+    case 1: return 16;   // soft click
+    case 2: return 14;   // medium click
+    case 3: return 1;    // strong click
     default: return 0;
   }
 }
 
-void fireLRA(uint8_t intensity) {
+void buzz(uint8_t intensity) {
   if (intensity == 0) return;
-  drv.setWaveform(0, getEffect(intensity));
+  drv.setWaveform(0, effectFor(intensity));
   drv.setWaveform(1, 0);
   drv.go();
-  delay(60);
+  delay(80);
 }
 
-// ── Apply pattern: "front,mid,back" ──
-void applyPattern(String signal, uint8_t front, uint8_t mid, uint8_t back) {
-  if (signal == last_signal) return;  // skip duplicate
-  last_signal = signal;
-
-  Serial.printf("[%s] %s -> F:%d M:%d B:%d\n",
-    BAND_SIDE, signal.c_str(), front, mid, back);
-
-  fireLRA(front);
-  fireLRA(mid);
-  fireLRA(back);
-
-  // Double pulse for STOP
-  if (signal == "STOP") {
-    delay(100);
-    fireLRA(3);
-    delay(80);
-    fireLRA(3);
-  }
-}
-
-// ── Parse server response: "SIGNAL,front,mid,back" ──
+// ── Parse server response: "SIGNAL,intensity" ──
 void parseAndApply(String response) {
   response.trim();
 
-  int c1 = response.indexOf(',');
-  int c2 = response.indexOf(',', c1 + 1);
-  int c3 = response.indexOf(',', c2 + 1);
+  int c = response.indexOf(',');
+  if (c <= 0) return;
 
-  if (c1 == -1 || c2 == -1 || c3 == -1) return;
+  String sig = response.substring(0, c);
+  uint8_t intensity = response.substring(c + 1).toInt();
 
-  String signal = response.substring(0, c1);
-  uint8_t front = response.substring(c1+1, c2).toInt();
-  uint8_t mid   = response.substring(c2+1, c3).toInt();
-  uint8_t back  = response.substring(c3+1).toInt();
+  if (sig == lastSignal) return;   // skip duplicate
+  lastSignal = sig;
 
-  applyPattern(signal, front, mid, back);
+  Serial.printf("[%s] %s  intensity=%d\n", BAND_SIDE, sig.c_str(), intensity);
+  buzz(intensity);
+
+  if (sig == "STOP") {          // double-pulse for STOP
+    delay(120);
+    buzz(3);
+  }
 }
 
-// ── Connect WiFi ──
 void connectWiFi() {
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  Serial.print("Connecting to ");
-  Serial.print(WIFI_SSID);
+  WiFi.begin(SSID, PASS);
+  WiFi.setSleep(false);
+  Serial.print("Connecting");
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 30) {
@@ -126,23 +104,23 @@ void connectWiFi() {
     Serial.println(" Connected!");
     Serial.print("IP: ");
     Serial.println(WiFi.localIP());
-    // Success pulse
-    fireLRA(1); delay(150); fireLRA(1);
+    buzz(1); delay(150); buzz(1);   // startup double-tap
   } else {
     Serial.println(" Failed!");
   }
 }
 
-// ── Setup ──
 void setup() {
   Serial.begin(115200);
+  delay(1500);
   Serial.printf("\nNullSense %s Band (WiFi) starting\n", BAND_SIDE);
 
   Wire.begin();
   if (!drv.begin()) {
     Serial.println("ERROR: DRV2605L not found! Check wiring.");
-    while(1) delay(1000);
+    while (1) delay(1000);
   }
+  drv.useLRA();
   drv.selectLibrary(1);
   drv.setMode(DRV2605_MODE_INTTRIG);
   Serial.println("DRV2605L OK");
@@ -150,29 +128,23 @@ void setup() {
   connectWiFi();
 }
 
-// ── Loop ──
 void loop() {
-  // Reconnect if dropped
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("WiFi lost — reconnecting...");
     connectWiFi();
     return;
   }
 
-  // Poll server at interval
-  if (millis() - last_poll >= POLL_INTERVAL) {
-    last_poll = millis();
+  if (millis() - lastPoll >= POLL_INTERVAL) {
+    lastPoll = millis();
 
     HTTPClient http;
-    String url = "http://" + String(SERVER_IP) + ":" +
-                 String(SERVER_PORT) + "/signal?band=" + BAND_SIDE;
+    String url = String("http://") + SERVER_IP + ":5000/signal?band=" + BAND_SIDE;
     http.begin(url);
-    http.setTimeout(200);  // fast timeout for responsiveness
+    http.setTimeout(300);
 
-    int code = http.GET();
-    if (code == 200) {
-      String response = http.getString();
-      parseAndApply(response);
+    if (http.GET() == 200) {
+      parseAndApply(http.getString());
     }
     http.end();
   }
