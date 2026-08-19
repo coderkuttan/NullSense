@@ -2,13 +2,23 @@ __pycache__/
 *.py[cod]
 .env
 venv/
-*.pt
-*.onnx
-models/*.pt
 datasets/
 *.zip
-runs/
 .DS_Store
 .vscode/
 .idea/
 *.log
+
+# Ignore all model weights/exports by default
+*.pt
+*.onnx
+
+# --- Exceptions: allow trained models in models/ to be committed ---
+# (needed so the trained model can be pulled and tested on another laptop)
+!models/best.pt
+!models/best.onnx
+
+# Ignore training runs (large intermediate artifacts)
+runs/
+training data/runs/
+training data/merged_dataset/
