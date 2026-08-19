@@ -99,13 +99,13 @@ RELEVANT_OBJECTS = [
     'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
     'scissors', 'teddy bear', 'hair drier', 'toothbrush',
     # Phase 6 — custom trained classes
-    'pothole', 'zebra_crossing', 'stray_animals'
+    'pothole', 'zebra_crossing',
 ]
 
 HIGH_PRIORITY = [
     'person', 'car', 'motorcycle',
     'bus', 'truck', 'dog', 'cow',
-    'pothole', 'zebra_crossing', 'stray_animals'   # Phase 6 — road hazard
+    'pothole', 'zebra_crossing',   # Phase 6 — road hazard
 ]
 
 # ══════════════════════════════════════════════
