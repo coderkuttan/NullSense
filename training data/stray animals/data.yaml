@@ -1,0 +1,13 @@
+train: ../train/images
+val: ../valid/images
+test: ../test/images
+
+nc: 5
+names: ['Cow', 'Donkey', 'camel', 'deer', 'dog']
+
+roboflow:
+  workspace: clientvideos
+  project: stray-animals-xnyc0
+  version: 5
+  license: CC BY 4.0
+  url: https://universe.roboflow.com/clientvideos/stray-animals-xnyc0/dataset/5

@@ -2,7 +2,8 @@ path: C:\Users\2441518\Documents\GitHub\NullSense\training data\merged_dataset
 train: train/images
 val: valid/images
 test: test/images
-nc: 2
+nc: 3
 names:
 - pothole
 - zebra_crossing
+- stray_animals
