@@ -19,7 +19,7 @@ SOURCE_ROOT = os.path.dirname(os.path.abspath(__file__))   # "training data/"
 MERGED_DIR  = os.path.join(SOURCE_ROOT, "merged_dataset")
 
 # Final class list -- index = class ID written into label files
-CLASS_NAMES = ["pothole", "zebra_crossing"]
+CLASS_NAMES = ["pothole", "zebra_crossing", "stray_animals"]
 
 # Training hyperparams
 MODEL_SIZE  = "yolo11s.pt"
@@ -28,7 +28,7 @@ IMG_SIZE    = 640
 BATCH       = 32      # raise to 64 if GPU util looks low (you have 51 GB VRAM)
 WORKERS     = 8       # dataloader workers
 PROJECT_DIR = os.path.join(SOURCE_ROOT, "runs")
-RUN_NAME    = "nullsense_pothole_zebra_v1"
+RUN_NAME    = "nullsense_all_classes_v1"
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
