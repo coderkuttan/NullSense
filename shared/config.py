@@ -68,7 +68,7 @@ SIDE_OBSTACLE_CM  = 60     # ultrasonic reading below this = side obstacle (phon
 #  MODEL
 # ══════════════════════════════════════════════
 COCO_MODEL_PATH = 'yolo11n.pt'
-POTHOLE_MODEL_PATH = 'models/best.pt'
+POTHOLE_MODEL_PATH = 'models/nullsense_potholes.pt'
 CONFIDENCE = 0.5
 POTHOLE_CONFIDENCE = 0.70  # Stricter confidence for potholes to reduce false positives
 # ══════════════════════════════════════════════
@@ -99,13 +99,13 @@ RELEVANT_OBJECTS = [
     'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase',
     'scissors', 'teddy bear', 'hair drier', 'toothbrush',
     # Phase 6 — custom trained classes
-    'pothole', 'zebra_crossing',
+    'pothole',
 ]
 
 HIGH_PRIORITY = [
     'person', 'car', 'motorcycle',
     'bus', 'truck', 'dog', 'cow',
-    'pothole', 'zebra_crossing',   # Phase 6 — road hazard
+    'pothole',   # Phase 6 — road hazard
 ]
 
 # ══════════════════════════════════════════════
