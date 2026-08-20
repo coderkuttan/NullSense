@@ -1,8 +1,7 @@
 """
 NullSense -- Local YOLO11 Training Script
-Trains a YOLO11s model on 2 datasets:
-  - pothole/        -> class 0: pothole
-  - zebra_crossing/ -> class 1: zebra_crossing
+Trains a YOLO11m model on the new Pothole dataset:
+  - Pothole/  -> class 0: pothole
 
 Run from the 'training data' folder:
   python train_local.py
@@ -19,16 +18,18 @@ SOURCE_ROOT = os.path.dirname(os.path.abspath(__file__))   # "training data/"
 MERGED_DIR  = os.path.join(SOURCE_ROOT, "merged_dataset")
 
 # Final class list -- index = class ID written into label files
-CLASS_NAMES = ["pothole", "zebra_crossing"]
+CLASS_NAMES = ["pothole"]
 
 # Training hyperparams
-MODEL_SIZE  = "yolo11s.pt"
-EPOCHS      = 150
+# yolo11m for more capacity -- 6k images warrants a bigger model than yolo11s
+MODEL_SIZE  = "yolo11m.pt"
+EPOCHS      = 300          # more epochs for better convergence on large dataset
+PATIENCE    = 50           # stop early if no improvement for 50 consecutive epochs
 IMG_SIZE    = 640
-BATCH       = 32      # raise to 64 if GPU util looks low (you have 51 GB VRAM)
-WORKERS     = 8       # dataloader workers
+BATCH       = 80           # 49GB VRAM - 10GB headroom = 39GB usable (~30.2GB at batch=64, scaled up)
+WORKERS     = 8            # dataloader workers
 PROJECT_DIR = os.path.join(SOURCE_ROOT, "runs")
-RUN_NAME    = "nullsense_pothole_zebra_v1"
+RUN_NAME    = "nullsense_pothole_v2"
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────
 
@@ -199,6 +200,8 @@ def train(yaml_path):
     print("=" * 60)
 
     device = 0 if torch.cuda.is_available() else "cpu"
+
+    # Download yolo11m.pt if not already present
     model  = YOLO(MODEL_SIZE)
 
     results = model.train(
@@ -208,14 +211,14 @@ def train(yaml_path):
         batch     = BATCH,
         project   = PROJECT_DIR,
         name      = RUN_NAME,
-        patience  = 30,
+        patience  = PATIENCE,
         device    = device,
         workers   = WORKERS,
         optimizer = "auto",
         cos_lr    = True,
         augment   = True,
         mosaic    = 1.0,
-        mixup     = 0.1,
+        mixup     = 0.15,   # slightly higher mixup helps with pothole variation
         plots     = True,
         task      = "detect",
     )
